@@ -2,12 +2,25 @@ import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cors from "cors";
+import fs from "fs";
+import path from "path";
+
+// ── Route Imports ────────────────────────────────────────────────────────────
 import authRoutes from "./routes/auth.route.js";
 import userRoutes from "./routes/user.route.js";
+import medicineRoutes from "./routes/medicine.routes.js";
+import prescriptionRoutes from "./routes/prescriptionRoutes.js"; // New Prescription Routes
 
 dotenv.config();
 
 const app = express();
+
+// ── Directory Setup ──────────────────────────────────────────────────────────
+// Ensures the 'uploads' folder exists on server start to avoid ENOENT errors
+const uploadDir = "uploads";
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 app.use(cors({
@@ -18,10 +31,17 @@ app.use(cors({
 // ── Middlewares ───────────────────────────────────────────────────────────────
 app.use(express.json());
 
+// Serve the uploads folder so images are accessible via URL
+// Example: http://localhost:4000/uploads/1714830000.jpg
+app.use("/uploads", express.static("uploads"));
+
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.get("/", (req, res) => res.send("Server running..."));
+app.get("/", (req, res) => res.send("Medico Guidance API Running..."));
+
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/medicines", medicineRoutes);
+app.use("/api/prescriptions", prescriptionRoutes); // Registering the Prescription Logic
 
 // ── DB Connection ─────────────────────────────────────────────────────────────
 let isConnecting = false;
@@ -34,8 +54,8 @@ const connectDB = async (retries = 5) => {
     try {
       await mongoose.connect(process.env.MONGODB_URI, {
         serverSelectionTimeoutMS: 10000,
-        socketTimeoutMS:          45000,
-        connectTimeoutMS:         10000,
+        socketTimeoutMS: 45000,
+        connectTimeoutMS: 10000,
       });
       console.log("✅ MongoDB Connected Successfully");
       isConnecting = false;
@@ -53,22 +73,18 @@ const connectDB = async (retries = 5) => {
   }
 };
 
-mongoose.connection.on("disconnected", () => {
-  if (!isConnecting) {
-    console.warn("MongoDB disconnected — retrying in 5s...");
-    setTimeout(() => connectDB(), 5000);
-  }
-});
-
-mongoose.connection.on("error", (err) => {
-  console.error("MongoDB error:", err.message);
-});
-
-mongoose.connection.on("connected", () => {
-  console.log("MongoDB connection stable ✓");
+// ── Global Error Handler ──────────────────────────────────────────────────────
+// Catches any unhandled errors and prevents the server from crashing
+app.use((err, req, res, next) => {
+  const statusCode = err.statusCode || 500;
+  res.status(statusCode).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+  });
 });
 
 // ── Start Server ──────────────────────────────────────────────────────────────
 connectDB().then(() => {
-  app.listen(4000, () => console.log("🚀 Server running on port 4000"));
+  const PORT = process.env.PORT || 4000;
+  app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 });

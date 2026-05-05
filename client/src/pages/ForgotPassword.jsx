@@ -1,51 +1,58 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import toast from 'react-hot-toast';
 import API from "../api/axios";
 
 const ForgotPassword = () => {
-  const [email, setEmail]     = useState("");
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError]     = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true); setError(""); setMessage("");
+    setLoading(true);
     try {
       const { data } = await API.post("/auth/forgot-password", { email });
-      setMessage(data.message);
+      toast.success(data.message || "Recovery link sent to your inbox");
     } catch (err) {
-      setError(err.response?.data?.message || "Something went wrong");
+      toast.error(err.response?.data?.message || "Could not process request");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 w-full max-w-md p-8">
-        <h1 className="text-2xl font-bold text-indigo-900 mb-1">Forgot Password</h1>
-        <p className="text-sm text-gray-400 mb-6">Enter your email to receive a reset link</p>
+    <div className="auth-wrapper font-sans">
+      <div className="auth-card">
+        <div className="mb-10 text-center">
+          <div className="w-12 h-12 bg-zinc-800 rounded-2xl mx-auto mb-6 flex items-center justify-center border border-zinc-700">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight">Recover Password</h1>
+          <p className="text-zinc-500 text-sm mt-1">We'll send a recovery link to your email.</p>
+        </div>
 
-        {message && <p className="text-sm text-green-600 bg-green-50 px-4 py-2 rounded-lg mb-4">{message}</p>}
-        {error   && <p className="text-sm text-red-500 bg-red-50 px-4 py-2 rounded-lg mb-4">{error}</p>}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="text-sm font-medium text-gray-700">Email</label>
-            <input type="email" required placeholder="john@example.com"
+            <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-widest">Registered Email</label>
+            <input 
+              type="email" required placeholder="name@domain.com"
               value={email} onChange={e => setEmail(e.target.value)}
-              className="mt-1 w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-indigo-400"
+              className="modern-input"
             />
           </div>
-          <button type="submit" disabled={loading}
-            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition disabled:opacity-50">
-            {loading ? "Sending..." : "Send Reset Link"}
+
+          <button type="submit" disabled={loading} className="btn-primary">
+            {loading ? "Sending..." : "Send Recovery Link"}
           </button>
-          <p className="text-center text-sm text-gray-400">
-            Remember it? <Link to="/login" className="text-indigo-600 font-medium">Login</Link>
-          </p>
         </form>
+
+        <div className="mt-8 text-center">
+          <Link to="/login" className="text-sm font-medium text-zinc-500 hover:text-white transition-colors">
+            ← Back to sign in
+          </Link>
+        </div>
       </div>
     </div>
   );

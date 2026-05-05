@@ -1,115 +1,175 @@
+import { useState, useEffect } from "react";
+import axios from "axios";
+import Header from "./Header";
+import { ShoppingCart, Zap, FileText, AlertCircle, Loader2, Upload, Eye } from "lucide-react";
+import { toast } from "react-hot-toast";
 
-import Header from "./Header"
 const Prescriptions = () => {
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  
+  // States for the integrated upload form
+  const [file, setFile] = useState(null);
+  const [medId, setMedId] = useState("");
+
+  useEffect(() => {
+    fetchPrescriptions();
+  }, []);
+
+  const fetchPrescriptions = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axios.get("http://localhost:4000/api/prescriptions/pending", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setPrescriptions(data.prescriptions);
+    } catch (error) {
+      console.error("Fetch error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    if (!file || !medId) return toast.error("Please select a file and medicine ID");
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append("medicine", medId);
+
+    try {
+      const token = localStorage.getItem("token");
+      await axios.post("http://localhost:4000/api/prescriptions/upload", formData, {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" }
+      });
+      toast.success("Prescription uploaded!");
+      setFile(null);
+      fetchPrescriptions(); // Refresh the list immediately
+    } catch (error) {
+      toast.error("Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleVerify = async (id, status) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.patch(`http://localhost:4000/api/prescriptions/verify/${id}`, 
+        { status }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      fetchPrescriptions();
+      toast.success(`Prescription ${status}!`);
+    } catch (error) {
+      toast.error("Action failed");
+    }
+  };
+
+  if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-cyan-600" size={40} /></div>;
+
   return (
-    <div>
+    <div className="bg-[#f8f9fa] min-h-screen font-poppins">
       <Header title="Prescription" />
-      <div className="p-5">
-
-        <div className="mb-6">
-            <h1 className="text-xl font-bold text-black">
-                ⚡ Prescription Management
-            </h1>
-            <p className="text-sm text-mauve-400 p-3">
-                SwiftRx™ prescriptions requiring pharmacy review
-            </p>
-
+      <div className="p-8 max-w-[1400px] mx-auto text-base">
+        
+        {/* QUICK UPLOAD SECTION */}
+        <div className="mb-10 bg-white p-6 rounded-[2rem] border-2 border-dashed border-cyan-100 shadow-sm">
+          <h2 className="text-lg font-black text-gray-800 mb-4 flex items-center gap-2">
+            <Upload size={20} className="text-cyan-500" /> Quick Test Upload
+          </h2>
+          <form onSubmit={handleUpload} className="flex flex-col md:flex-row gap-4">
+            <input 
+              type="text" 
+              placeholder="Enter Medicine MongoDB ID" 
+              className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-cyan-500 outline-none"
+              value={medId}
+              onChange={(e) => setMedId(e.target.value)}
+            />
+            <input 
+              type="file" 
+              onChange={(e) => setFile(e.target.files[0])}
+              className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-cyan-50 file:text-cyan-700 hover:file:bg-cyan-100"
+            />
+            <button 
+              disabled={uploading}
+              className="bg-cyan-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-cyan-700 disabled:bg-gray-300 transition-all"
+            >
+              {uploading ? "Uploading..." : "Submit Prescription"}
+            </button>
+          </form>
         </div>
-        <span className="p-3 font-semibold text-orange-900 bg-orange-100 rounded-lg ">
-            ⚠️ 3 prescriptions are awaiting pharmacist review before dispensing can proceed.
-        </span>
-        <div className="p-10 bg-white text-black rounded-xl shadow-md mt-6">
-  <h1 className="text-lg font-bold text-black border-b p-3 mb-6">
-    Awaiting Pharmacist Review
-  </h1>
-  <div className="space-y-4">
-    {/* Prescription Item Start */}
-    <div className="flex items-center justify-between p-4 border border-gray-100 rounded-2xl bg-white shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-center gap-4">
-        {/* Prescription Icon */}
-        <div className="text-2xl">📋</div>
-        
-        {/* Prescription Details */}
-        <div className="flex flex-col">
-          <div className="flex items-center gap-3">
-            <span className="font-extrabold text-gray-900">RX-7284099</span>
-            <span className="text-gray-400">•</span>
-            <span className="font-bold text-gray-800">Patient: J. Smith</span>
-            <span className="text-gray-400">•</span>
-            <span className="font-bold text-gray-800">Mounjaro 2.5mg × 4</span>
+
+        {/* NOTIFICATION BOX */}
+        <div className="flex items-center gap-3 p-4 font-bold text-orange-700 bg-orange-50 border border-orange-100 rounded-2xl mb-8 shadow-sm">
+          <AlertCircle size={22} />
+          <span>Notice: Items only become purchasable after a clinical pharmacist review.</span>
+        </div>
+
+        {/* LIST SECTION */}
+        <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+            <h2 className="text-lg font-black text-gray-800 uppercase">Verification Queue</h2>
+            <span className="bg-white px-4 py-1 rounded-full text-xs font-bold text-gray-400 border border-gray-100">
+              {prescriptions.length} Records Found
+            </span>
           </div>
-          <div className="text-[11px] text-gray-400 mt-1">
-            Prescriber: Dr. Jane Williams (NMC: 1234567A) · Via PrescribeLink™ · Tom Clarke
-          </div>
-          <div className="text-[11px] text-gray-400">
-            Issued: Today 14:32 · Expires: 18 Jun 2025
+
+          <div className="p-6 space-y-4">
+            {prescriptions.length === 0 ? (
+              <div className="text-center py-20 text-gray-400">No records. Use the upload box above to test.</div>
+            ) : (
+              prescriptions.map((rx) => (
+                <div key={rx._id} className="flex flex-col md:flex-row items-center justify-between p-6 border border-gray-100 rounded-[1.5rem] bg-white hover:border-cyan-200 transition-all gap-6 shadow-sm">
+                  <div className="flex items-center gap-5">
+                    <div className="relative group">
+                      <img 
+                        src={`http://localhost:4000/uploads/${rx.image}`} 
+                        className="w-20 h-20 rounded-2xl object-cover border border-gray-200"
+                        alt="Rx"
+                      />
+                      <button 
+                        onClick={() => window.open(`http://localhost:4000/uploads/${rx.image}`, '_blank')}
+                        className="absolute inset-0 bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                      >
+                        <Eye size={20} />
+                      </button>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-black text-gray-900 text-base">RX-{rx._id.slice(-6).toUpperCase()}</span>
+                      <span className="text-base font-extrabold text-cyan-600">{rx.medicine?.name || "Medicine ID: " + rx.medicine}</span>
+                      <span className={`text-xs font-bold uppercase ${rx.status === 'approved' ? 'text-emerald-500' : 'text-orange-500'}`}>
+                        {rx.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    {rx.status === "pending" ? (
+                      <>
+                        <button onClick={() => handleVerify(rx._id, "approved")} className="px-6 py-2 bg-emerald-500 text-white rounded-lg font-bold">Approve</button>
+                        <button onClick={() => handleVerify(rx._id, "rejected")} className="px-6 py-2 border border-red-200 text-red-500 rounded-lg font-bold">Reject</button>
+                      </>
+                    ) : rx.status === "approved" ? (
+                      <>
+                        <button className="px-6 py-2 bg-gray-900 text-white rounded-lg font-bold flex items-center gap-2"><ShoppingCart size={16}/> Add to Cart</button>
+                        <button className="px-6 py-2 bg-cyan-500 text-white rounded-lg font-bold flex items-center gap-2 shadow-lg shadow-cyan-100"><Zap size={16} fill="white"/> Buy Now</button>
+                      </>
+                    ) : (
+                      <span className="text-red-500 font-bold px-4 py-2 bg-red-50 rounded-lg border border-red-100">Rejected</span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="px-3 py-1.5 bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-tighter rounded-full flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span>
-          Awaiting Review
-        </span>
-        
-        <button className="px-5 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm flex items-center gap-1">
-          ✓ Approve
-        </button>
-        
-        <button className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 transition-colors">
-          View Full Rx
-        </button>
-        
-        <button className="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-bold hover:bg-red-600 transition-colors shadow-sm">
-          Query
-        </button>
       </div>
     </div>
-    <div className="flex items-center justify-between p-4 border border-gray-100 rounded-2xl bg-white shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-center gap-4">
-        {/* Prescription Icon */}
-        <div className="text-2xl">📋</div>
-        
-        {/* Prescription Details */}
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <span className="font-extrabold text-gray-900">RX-7284099</span>
-            <span className="text-gray-400">•</span>
-            <span className="font-bold text-gray-800">Patient: J. Smith</span>
-            <span className="text-gray-400">•</span>
-            <span className="font-bold text-gray-800">Mounjaro 2.5mg × 4</span>
-          </div>
-          <div className="text-[11px] text-gray-400 mt-1">
-            Prescriber: Dr. Jane Williams (NMC: 1234567A) · Via PrescribeLink™ · Tom Clarke
-          </div>
-          <div className="text-[11px] text-gray-400">
-            Issued: Today 14:32 · Expires: 18 Jun 2025
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="px-3 py-1.5 bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-tighter rounded-full flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span>
-          Awaiting Review
-        </span>
-        
-        <button className="px-5 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm flex items-center gap-1">
-          ✓ Approve
-        </button>
-        
-        <button className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 transition-colors">
-          View Full Rx
-        </button>
-        
-        
-      </div>
-    </div>
-    {/* Prescription Item End */}
-  </div>
-</div>
-      </div>
-    </div>
-  )
-}
+  );
+};
 
-export default Prescriptions
+export default Prescriptions;

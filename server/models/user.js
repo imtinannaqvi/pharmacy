@@ -16,4 +16,7 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("User", userSchema);
+// This safe check prevents the OverwriteModelError
+const User = mongoose.models.User || mongoose.model("User", userSchema);
+
+export default User;

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
+import { CartProvider } from './context/CartContext' 
 import Sidebar from './components/Sidebar'
 import Dashboard from './components/Dashboard'
 import Analytics from './components/Analytics'
@@ -16,8 +18,10 @@ import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import './App.css'
+import Home from './pages/Home'
+import TrendPro from './pages/TrendPro'
+import CartPage from './pages/CartPage';
 
-// ── Main Dashboard Layout ─────────────────────────────────────────────────────
 const DashboardLayout = () => {
   const [activePage, setActivePage] = useState('dashboard')
 
@@ -45,31 +49,51 @@ const DashboardLayout = () => {
   )
 }
 
-// ── Protected Route ───────────────────────────────────────────────────────────
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('token')
-  return token ? children : <Navigate to="/login" />
+  const user = JSON.parse(localStorage.getItem('user'))
+
+  // Check for admin role logic
+  if (!token || user?.role?.toLowerCase() !== 'admin') {
+    return <Navigate to="/login" replace />
+  }
+
+  return children
 }
 
-// ── App ───────────────────────────────────────────────────────────────────────
 const App = () => {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Auth Pages */}
-        <Route path="/login"                   element={<Login />} />
-        <Route path="/register"                element={<Register />} />
-        <Route path="/forgot-password"         element={<ForgotPassword />} />
-        <Route path="/reset-password/:token"   element={<ResetPassword />} />
+    <CartProvider>
+      <BrowserRouter>
+        <Toaster position="top-center" reverseOrder={false} />
+        
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/home" element={<Home />} />
+          <Route path="/trendpro" element={<TrendPro/>} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
+          
+          {/* FIXED: Explicit Cart Route to prevent redirection to login */}
+          <Route path="/cart" element={<CartPage />} />
 
-        {/* Protected Dashboard */}
-        <Route path="/*" element={
-          <ProtectedRoute>
-            <DashboardLayout />
-          </ProtectedRoute>
-        } />
-      </Routes>
-    </BrowserRouter>
+          {/* Protected Admin Routes */}
+          <Route path="/admin/*" element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          } />
+
+          {/* Root Redirect */}
+          <Route path="/" element={<Navigate to="/home" replace />} />
+
+          {/* Catch-all: Redirect to home instead of login for invalid URLs */}
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </CartProvider>
   )
 }
 
