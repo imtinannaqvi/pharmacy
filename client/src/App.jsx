@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { CartProvider } from './context/CartContext' 
 import Sidebar from './components/Sidebar'
@@ -21,9 +21,19 @@ import './App.css'
 import Home from './pages/Home'
 import TrendPro from './pages/TrendPro'
 import CartPage from './pages/CartPage';
+import ProductDetails from './pages/ProductDetails'
 
 const DashboardLayout = () => {
   const [activePage, setActivePage] = useState('dashboard')
+  const location = useLocation();
+
+  // Sync activePage if the URL changes directly
+  useEffect(() => {
+    const path = location.pathname.split('/').pop();
+    if (path && path !== 'admin' && pages[path]) {
+      setActivePage(path);
+    }
+  }, [location]);
 
   const pages = {
     dashboard:     <Dashboard />,
@@ -50,16 +60,18 @@ const DashboardLayout = () => {
 }
 
 const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('token')
-  const user = JSON.parse(localStorage.getItem('user'))
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-  // Check for admin role logic
-  if (!token || user?.role?.toLowerCase() !== 'admin') {
-    return <Navigate to="/login" replace />
+  if (!token) return <Navigate to="/login" replace />;
+  
+  // Checking admin role as per your setup
+  if (user?.role?.toLowerCase() !== 'admin') {
+    return <Navigate to="/home" replace />;
   }
 
-  return children
-}
+  return children;
+};
 
 const App = () => {
   return (
@@ -68,28 +80,32 @@ const App = () => {
         <Toaster position="top-center" reverseOrder={false} />
         
         <Routes>
-          {/* Public Routes */}
+          {/* ✅ Public - anyone can access */}
+          <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Home />} />
-          <Route path="/trendpro" element={<TrendPro/>} />
+          
+          {/* 
+              FIX: Changed path to /medicine/:id to match the Navbar navigation 
+              and the Medico Guidance API context
+          */}
+          <Route path="/medicine/:id" element={<ProductDetails/>} />
+          <Route path="/product/:id" element={<ProductDetails/>} /> {/* Added as backup */}
+          
+          <Route path="/trendpro" element={<TrendPro />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password/:token" element={<ResetPassword />} />
-          
-          {/* FIXED: Explicit Cart Route to prevent redirection to login */}
           <Route path="/cart" element={<CartPage />} />
 
-          {/* Protected Admin Routes */}
+          {/* ✅ Admin only */}
           <Route path="/admin/*" element={
             <ProtectedRoute>
               <DashboardLayout />
             </ProtectedRoute>
           } />
 
-          {/* Root Redirect */}
-          <Route path="/" element={<Navigate to="/home" replace />} />
-
-          {/* Catch-all: Redirect to home instead of login for invalid URLs */}
+          {/* ✅ Catch-all → home */}
           <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
       </BrowserRouter>

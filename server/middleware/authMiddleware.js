@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import User from "../models/user.js";
+import User from "../models/User.js";
 
 // General Authentication
 export const auth = async (req, res, next) => {
@@ -27,14 +27,24 @@ export const auth = async (req, res, next) => {
   }
 };
 
-// Admin/Pharmacist Authorization (The missing export)
+// Admin Only Authorization
 export const adminOnly = (req, res, next) => {
-  // Checks for admin status or pharmacist role
-  if (req.user && (req.user.isAdmin || req.user.role === "admin" || req.user.role === "pharmacist")) {
+  if (req.user && req.user.role === "admin") {
     next();
   } else {
-    res.status(403).json({ 
-      message: "Access denied. Only pharmacists or admins can perform this action." 
+    res.status(403).json({
+      message: "Access denied. Admins only.",
+    });
+  }
+};
+
+// Admin or Pharmacist Authorization
+export const adminOrPharmacist = (req, res, next) => {
+  if (req.user && (req.user.role === "admin" || req.user.role === "pharmacist")) {
+    next();
+  } else {
+    res.status(403).json({
+      message: "Access denied. Only admins or pharmacists can perform this action.",
     });
   }
 };

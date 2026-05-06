@@ -1,4 +1,5 @@
-const mongoose = require('mongoose');
+// models/Cart.js
+import mongoose from "mongoose";
 
 const cartSchema = new mongoose.Schema({
   userId: {
@@ -9,8 +10,7 @@ const cartSchema = new mongoose.Schema({
   items: [
     {
       productId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Medicine', // Matches your existing inventory model
+        type: String, // ✅ CHANGED from ObjectId to String — fixes comparison issues
         required: true
       },
       name: String,
@@ -29,4 +29,4 @@ const cartSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Cart', cartSchema);
+export default mongoose.model('Cart', cartSchema);

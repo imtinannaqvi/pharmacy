@@ -15,14 +15,12 @@ export const createMedicine = async (req, res) => {
       prescriptionType,
       buyingPrice,
       sellingPrice,
-      price, // Support for legacy field
+      price,
       stock,
       sku,
       supplier,
     } = req.body;
 
-    // Capture the file path from Multer (if it exists)
-    // We replace backslashes with forward slashes for URL consistency
     const imagePath = req.file ? req.file.path.replace(/\\/g, "/") : null;
 
     const medicine = await Medicine.create({
@@ -37,12 +35,12 @@ export const createMedicine = async (req, res) => {
       prescriptionType,
       buyingPrice: Number(buyingPrice) || 0,
       sellingPrice: Number(sellingPrice) || Number(price) || 0,
-      price: Number(price) || Number(sellingPrice) || 0, // Fill legacy 'price' field
+      price: Number(price) || Number(sellingPrice) || 0,
       stock: Number(stock) || 0,
       sku,
       supplier,
       image: imagePath,
-      sellerId: req.user?._id, // Available if 'protect' middleware is used
+      sellerId: req.user?._id,
     });
 
     res.status(201).json({
@@ -60,16 +58,19 @@ export const updateMedicine = async (req, res) => {
   try {
     const updates = { ...req.body };
 
-    // If a new file is uploaded, update the image path in the update object
     if (req.file) {
       updates.image = req.file.path.replace(/\\/g, "/");
     }
 
-    // Ensure numeric fields are correctly typed
     if (updates.buyingPrice) updates.buyingPrice = Number(updates.buyingPrice);
     if (updates.sellingPrice) updates.sellingPrice = Number(updates.sellingPrice);
     if (updates.price) updates.price = Number(updates.price);
     if (updates.stock) updates.stock = Number(updates.stock);
+    
+    // Handle boolean conversion for prescription if it comes as a string
+    if (updates.prescriptionRequired) {
+      updates.prescriptionRequired = updates.prescriptionRequired === 'true' || updates.prescriptionRequired === true;
+    }
 
     const medicine = await Medicine.findByIdAndUpdate(
       req.params.id,
@@ -91,50 +92,59 @@ export const updateMedicine = async (req, res) => {
   }
 };
 
-// ✅ OTHER METHODS (unchanged but included for completeness)
+// ✅ GET ALL MEDICINES (RESTORED)
 export const getAllMedicines = async (req, res) => {
   try {
     const medicines = await Medicine.find().sort({ createdAt: -1 });
     res.status(200).json({ medicines });
   } catch (error) {
+    console.error("Fetch All Error:", error.message);
     res.status(500).json({ message: "Failed to fetch inventory" });
   }
 };
 
+// ✅ GET MEDICINE BY ID
 export const getMedicineById = async (req, res) => {
   try {
     const medicine = await Medicine.findById(req.params.id);
     if (!medicine) return res.status(404).json({ message: "Not found" });
     res.status(200).json({ medicine });
   } catch (error) {
+    console.error("Fetch ID Error:", error.message);
     res.status(500).json({ message: "Error fetching item" });
   }
 };
 
+// ✅ DELETE MEDICINE
 export const deleteMedicine = async (req, res) => {
   try {
     const medicine = await Medicine.findByIdAndDelete(req.params.id);
     if (!medicine) return res.status(404).json({ message: "Not found" });
     res.status(200).json({ message: "Medicine removed from inventory" });
   } catch (error) {
+    console.error("Delete Error:", error.message);
     res.status(500).json({ message: "Delete failed" });
   }
 };
 
+// ✅ GET BY CATEGORY
 export const getMedicinesByCategory = async (req, res) => {
   try {
     const medicines = await Medicine.find({ category: req.params.category });
     res.status(200).json({ medicines });
   } catch (error) {
+    console.error("Category Error:", error.message);
     res.status(500).json({ message: "Category search failed" });
   }
 };
 
+// ✅ GET PRESCRIPTION ONLY
 export const getPrescriptionMedicines = async (req, res) => {
   try {
     const medicines = await Medicine.find({ prescriptionRequired: true });
     res.status(200).json({ medicines });
   } catch (error) {
+    console.error("Prescription Fetch Error:", error.message);
     res.status(500).json({ message: "Failed to fetch prescription-only items" });
   }
 };

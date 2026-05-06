@@ -3,35 +3,41 @@ import { useNavigate, Link } from "react-router-dom";
 import toast from 'react-hot-toast';
 import { Mail, Lock, Pill } from 'lucide-react';
 import API from "../api/axios";
+import { useCart } from "../context/CartContext"; // 👈 add this import
 
 const Login = () => {
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { fetchCart } = useCart(); // 👈 add this
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const { data } = await API.post("/auth/login", form);
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+ const handleLogin = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  try {
+    const { data } = await API.post("/auth/login", form);
+    
+    console.log("Login response:", data); // ← check this
+    
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("user", JSON.stringify(data.user));
 
-      if (data.user.role.toLowerCase() === "admin") {
-        toast.success("Authenticated successfully");
-        return navigate("/admin"); 
-      } else {
-        toast.success("User logged in successfully");
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Check your credentials");
-    } finally {
-      setLoading(false);
+    if (data.user.role.toLowerCase() === "admin") {
+      toast.success("Welcome Admin!");
+      setTimeout(() => navigate("/admin"), 500); // ✅ small delay for toast
+    } else {
+      toast.success("Logged in successfully!");
+      setTimeout(() => navigate("/home"), 500); // ✅ small delay for toast
     }
-  };
+  } catch (err) {
+    console.error("Login error:", err.response?.data);
+    toast.error(err.response?.data?.message || "Check your credentials");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
-    /* font-poppins applied to main wrapper */
     <div className="h-screen w-full bg-[#F4F7F6] font-poppins flex items-center justify-center p-4 md:p-6 overflow-hidden">
       
       <div className="w-full max-w-[1000px] max-h-[90vh] bg-white rounded-[2rem] shadow-2xl overflow-hidden flex flex-col md:flex-row border border-gray-100">
@@ -47,7 +53,7 @@ const Login = () => {
             </div>
 
             <div className="relative">
-              <span className="absolute -top-10 -left-4 text-7xl text-teal-400/10 font-serif select-none">“</span>
+              <span className="absolute -top-10 -left-4 text-7xl text-teal-400/10 font-serif select-none">"</span>
               <h2 className="text-2xl lg:text-3xl font-bold leading-tight mb-6">
                 Ensuring <span className="text-teal-400">Precision</span> <br /> 
                 in Healthcare.

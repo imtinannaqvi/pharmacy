@@ -6,13 +6,13 @@ import { useCart } from "../context/CartContext";
 import { toast } from "react-hot-toast";
 
 const Products = () => {
-  // Access the addToCart function from our context
   const { addToCart } = useCart();
   
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(null); 
+  const [addingToCart, setAddingToCart] = useState(null); // ✅ track which item is being added
   
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -34,12 +34,14 @@ const Products = () => {
   const fetchProducts = async () => {
     try {
       const response = await API.get("/medicines"); 
-      const data = Array.isArray(response.data) ? response.data : (response.data.medicines || []);
+      const data = Array.isArray(response.data) 
+        ? response.data 
+        : (response.data.medicines || []);
       setProducts(data);
-      setLoading(false);
     } catch (error) {
       console.error("Error fetching products:", error);
       setProducts([]); 
+    } finally {
       setLoading(false);
     }
   };
@@ -48,13 +50,26 @@ const Products = () => {
     fetchProducts();
   }, []);
 
-  // Handler for adding items to the cart with a UI notification
+  // ✅ Fixed handleAddToCart with guard + loading state
   const handleAddToCart = async (product) => {
+    // Guard: make sure product has _id
+    if (!product._id) {
+      toast.error("Invalid product.");
+      return;
+    }
+
+    // Prevent double-click
+    if (addingToCart === product._id) return;
+
+    setAddingToCart(product._id);
     try {
-      await addToCart(product);
+await addToCart(product);
       toast.success(`${product.name} added to cart!`);
     } catch (error) {
-      toast.error("Failed to add item to cart.");
+      console.error("Add to cart error:", error?.response?.data || error.message);
+      toast.error(error?.response?.data?.message || "Failed to add item to cart.");
+    } finally {
+      setAddingToCart(null);
     }
   };
 
@@ -73,7 +88,6 @@ const Products = () => {
       sku: product.sku || "",
       supplier: product.supplier || ""
     });
-    
     if (product.image) {
       setPreviewUrl(`http://localhost:4000/${product.image}`);
     }
@@ -123,9 +137,7 @@ const Products = () => {
     }
 
     try {
-      const config = {
-        headers: { "Content-Type": "multipart/form-data" }
-      };
+      const config = { headers: { "Content-Type": "multipart/form-data" } };
 
       if (selectedId) {
         const response = await API.put(`/medicines/${selectedId}`, data, config);
@@ -138,7 +150,6 @@ const Products = () => {
         setProducts(prev => [...prev, newProduct]);
         toast.success("Product added to inventory");
       }
-      
       closeModal();
     } catch (error) {
       console.error("Error saving product:", error);
@@ -178,7 +189,6 @@ const Products = () => {
               {products.length} active medical listings
             </p>
           </div>
-          
           <button 
             onClick={() => setIsModalOpen(true)}
             className="px-6 py-2.5 bg-cyan-500 text-white rounded-xl text-sm font-bold hover:bg-cyan-600 transition-all shadow-lg shadow-cyan-100 flex items-center gap-2"
@@ -201,7 +211,17 @@ const Products = () => {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan="6" className="text-center py-20 font-bold italic text-gray-400">Syncing with API...</td></tr>
+                <tr>
+                  <td colSpan="6" className="text-center py-20 font-bold italic text-gray-400">
+                    Syncing with API...
+                  </td>
+                </tr>
+              ) : products.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-20 font-bold italic text-gray-400">
+                    No products found.
+                  </td>
+                </tr>
               ) : products.map((item) => (
                 <tr key={item._id} className="hover:bg-gray-50/50 transition-all group">
                   <td className="py-4 px-6">
@@ -219,12 +239,16 @@ const Products = () => {
                       </div>
                       <div className="flex flex-col">
                         <span className="font-extrabold text-gray-900 text-sm">{item.name}</span>
-                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{item.sku || "NO-SKU-ASSIGNED"}</span>
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
+                          {item.sku || "NO-SKU-ASSIGNED"}
+                        </span>
                       </div>
                     </div>
                   </td>
                   <td className="py-4 px-6">
-                    <span className="text-[10px] bg-cyan-50 text-cyan-600 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider">{item.category}</span>
+                    <span className="text-[10px] bg-cyan-50 text-cyan-600 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider">
+                      {item.category}
+                    </span>
                   </td>
                   <td className="py-4 px-6">
                     <div className="flex flex-col">
@@ -234,7 +258,9 @@ const Products = () => {
                   </td>
                   <td className="py-4 px-6">
                     <span className={`text-xs font-black ${item.buyingPrice ? 'text-green-600' : 'text-gray-300'}`}>
-                      {item.buyingPrice ? (((item.sellingPrice - item.buyingPrice) / item.sellingPrice) * 100).toFixed(0) : 0}%
+                      {item.buyingPrice 
+                        ? (((item.sellingPrice - item.buyingPrice) / item.sellingPrice) * 100).toFixed(0) 
+                        : 0}%
                     </span>
                   </td>
                   <td className="py-4 px-6">
@@ -244,22 +270,36 @@ const Products = () => {
                   </td>
                   <td className="py-4 px-6 text-right">
                     <div className="flex justify-end gap-3">
-                        {/* Cart Button Added Here */}
-                        <button 
-                          onClick={() => handleAddToCart(item)} 
-                          className="p-2 text-green-500 hover:bg-green-50 rounded-lg transition-all"
-                          title="Add to Cart"
-                        >
-                          <ShoppingCart size={18}/>
-                        </button>
+                      {/* ✅ Cart button with loading spinner */}
+                      <button 
+                        onClick={() => handleAddToCart(item)} 
+                        disabled={addingToCart === item._id}
+                        className={`p-2 rounded-lg transition-all ${
+                          addingToCart === item._id
+                            ? 'text-gray-300 cursor-not-allowed'
+                            : 'text-green-500 hover:bg-green-50'
+                        }`}
+                        title="Add to Cart"
+                      >
+                        {addingToCart === item._id 
+                          ? <span className="text-xs font-bold">...</span>
+                          : <ShoppingCart size={18}/>
+                        }
+                      </button>
 
-                        <button onClick={() => handleEdit(item)} className="p-2 text-cyan-500 hover:bg-cyan-50 rounded-lg transition-all">
-                          <Edit size={18}/>
-                        </button>
-                        
-                        <button onClick={() => handleDelete(item._id)} className="p-2 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
-                          <Trash2 size={18}/>
-                        </button>
+                      <button 
+                        onClick={() => handleEdit(item)} 
+                        className="p-2 text-cyan-500 hover:bg-cyan-50 rounded-lg transition-all"
+                      >
+                        <Edit size={18}/>
+                      </button>
+                      
+                      <button 
+                        onClick={() => handleDelete(item._id)} 
+                        className="p-2 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      >
+                        <Trash2 size={18}/>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -269,19 +309,17 @@ const Products = () => {
         </div>
       </div>
 
-      {/* Modal section remains unchanged from your previous logic */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
           <div className="bg-white rounded-[2.5rem] w-full max-w-5xl p-10 shadow-2xl overflow-y-auto max-h-[95vh]">
             <div className="flex justify-between items-center mb-8">
-                <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">
-                 {selectedId ? "Modify Medicine Record" : "New Inventory Entry"}
-                </h2>
-                <button onClick={closeModal} className="w-10 h-10 flex items-center justify-center bg-gray-50 rounded-full text-gray-400 hover:text-red-500 transition-all">✕</button>
+              <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">
+                {selectedId ? "Modify Medicine Record" : "New Inventory Entry"}
+              </h2>
+              <button onClick={closeModal} className="w-10 h-10 flex items-center justify-center bg-gray-50 rounded-full text-gray-400 hover:text-red-500 transition-all">✕</button>
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col lg:flex-row gap-10">
-              
               <div className="w-full lg:w-5/12 space-y-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest">Product Visualization</label>

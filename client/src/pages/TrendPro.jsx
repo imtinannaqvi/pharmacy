@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, ShoppingCart, Check, Star } from 'lucide-react';
 import API from "../api/axios";
+import { useCart } from '../context/CartContext';
+import { toast } from 'react-hot-toast';
 
 const TrendPro = () => {
+  const { addToCart } = useCart();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [added, setAdded] = useState({});
@@ -27,7 +30,6 @@ const TrendPro = () => {
     fetchTrending();
   }, []);
 
-  // Staggered card reveal after products load
   useEffect(() => {
     if (!loading && products.length) {
       products.forEach((_, i) => {
@@ -38,9 +40,22 @@ const TrendPro = () => {
     }
   }, [loading, products]);
 
-  const handleAddToCart = (id) => {
-    setAdded(prev => ({ ...prev, [id]: true }));
-    setTimeout(() => setAdded(prev => ({ ...prev, [id]: false })), 2000);
+  // ✅ Fixed: actually calls CartContext addToCart
+  const handleAddToCart = async (product) => {
+    if (added[product._id]) return; // prevent double click
+
+    try {
+      await addToCart(product);
+      // ✅ Show green checkmark on button
+      setAdded(prev => ({ ...prev, [product._id]: true }));
+      toast.success(`${product.name} added to cart!`);
+      setTimeout(() => {
+        setAdded(prev => ({ ...prev, [product._id]: false }));
+      }, 2000);
+    } catch (error) {
+      console.error("Add to cart error:", error);
+      toast.error("Failed to add to cart. Please login first.");
+    }
   };
 
   const SkeletonCard = ({ delay }) => (
@@ -59,7 +74,6 @@ const TrendPro = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 py-12 bg-white font-sans">
 
-      {/* Animated progress bar while loading */}
       {loading && (
         <div className="h-0.5 bg-gray-100 rounded mb-8 overflow-hidden">
           <div
@@ -69,7 +83,6 @@ const TrendPro = () => {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex justify-between items-end mb-8">
         <div>
           <h2
@@ -78,7 +91,6 @@ const TrendPro = () => {
           >
             Trending <span className="text-green-600">Products</span>
           </h2>
-          
         </div>
         <button className="flex items-center gap-1 text-sm font-medium text-green-600 hover:text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg transition-all group">
           View All
@@ -86,7 +98,6 @@ const TrendPro = () => {
         </button>
       </div>
 
-      {/* Product Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
         {loading
           ? Array(8).fill(0).map((_, i) => (
@@ -97,7 +108,6 @@ const TrendPro = () => {
               const isAdded = added[item._id];
               const price = item.sellingPrice || item.price;
               const originalPrice = Math.round(price * 1.1);
-              const discount = Math.round(100 - (price / (price * 1.1)) * 100);
 
               return (
                 <div
@@ -106,8 +116,7 @@ const TrendPro = () => {
                   style={{
                     opacity: isVisible ? 1 : 0,
                     transform: isVisible ? 'translateY(0)' : 'translateY(20px)',
-                    transition:
-                      'opacity 0.45s cubic-bezier(0.22,1,0.36,1), transform 0.45s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s, border-color 0.3s',
+                    transition: 'opacity 0.45s cubic-bezier(0.22,1,0.36,1), transform 0.45s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s, border-color 0.3s',
                   }}
                   onMouseEnter={e => {
                     e.currentTarget.style.boxShadow = '0 8px 30px rgba(22,163,74,0.13)';
@@ -120,12 +129,6 @@ const TrendPro = () => {
                     e.currentTarget.style.transform = 'translateY(0)';
                   }}
                 >
-                  {/* Discount badge */}
-                  {/* <span className="absolute top-3 left-3 text-[10px] font-semibold bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full z-10">
-                    {discount}% off
-                  </span> */}
-
-                  {/* Product Image */}
                   <div className="aspect-square mb-4 flex items-center justify-center bg-gray-50 rounded-xl overflow-hidden p-4">
                     {item.image ? (
                       <img
@@ -138,15 +141,11 @@ const TrendPro = () => {
                     )}
                   </div>
 
-                  {/* Star rating with pop-in animation */}
-                 
-
-                  {/* Product name */}
                   <h3 className="text-lg font-bold text-gray-700 mb-4 line-clamp-2 min-h-[40px]">
                     {item.name}
                   </h3>
-                     
-                      <div className="flex gap-0.5 mb-2">
+
+                  <div className="flex gap-0.5 mb-2">
                     {[...Array(5)].map((_, si) => (
                       <Star
                         key={si}
@@ -159,7 +158,7 @@ const TrendPro = () => {
                       />
                     ))}
                   </div>
-                  {/* Price + Cart */}
+
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="text-xs text-gray-400 line-through">
@@ -169,11 +168,13 @@ const TrendPro = () => {
                         £{price}.00
                       </p>
                     </div>
+                    {/* ✅ Fixed: pass full product object not just id */}
                     <button
-                      onClick={() => handleAddToCart(item._id)}
+                      onClick={() => handleAddToCart(item)}
+                      disabled={added[item._id]}
                       className="w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md shadow-green-200 transition-all duration-200 active:scale-90"
                       style={{ background: isAdded ? '#15803d' : '#16a34a' }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; }}
+                      onMouseEnter={e => { if (!isAdded) e.currentTarget.style.transform = 'scale(1.1)'; }}
                       onMouseLeave={e => { e.currentTarget.style.transform = ''; }}
                     >
                       {isAdded

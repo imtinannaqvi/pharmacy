@@ -4,91 +4,104 @@ import API from "../api/axios";
 const CartContext = createContext(undefined);
 
 export const CartProvider = ({ children }) => {
-  const [cart, setCart] = useState(() => {
-    const savedCart = localStorage.getItem("verbic_cart");
-    return savedCart ? JSON.parse(savedCart) : { items: [] };
-  });
+  const [cart, setCart] = useState({ items: [], totalAmount: 0 });
   const [cartCount, setCartCount] = useState(0);
 
   useEffect(() => {
-    const items = cart?.items || [];
-    const count = items.reduce((acc, item) => acc + (item.quantity || 0), 0);
+    const count = (cart?.items || []).reduce((acc, i) => acc + (i.quantity || 0), 0);
     setCartCount(count);
-    localStorage.setItem("verbic_cart", JSON.stringify(cart));
   }, [cart]);
 
-  const addToCart = async (product) => {
-    try {
-      const token = localStorage.getItem('token');
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      API.get("/cart")
+        .then((res) => {
+          console.log("✅ Cart loaded from DB:", res.data);
+          setCart(res.data || { items: [], totalAmount: 0 });
+        })
+        .catch((err) => console.error("❌ Cart fetch error:", err?.response?.data));
+    }
+  }, []);
 
-      if (!token) {
-        // Guest cart — update locally without hitting API
-        setCart(prev => {
-          const items = prev?.items || [];
-          const existing = items.find(i => i.productId === product._id);
-          if (existing) {
-            return {
-              ...prev,
-              items: items.map(i =>
-                i.productId === product._id
-                  ? { ...i, quantity: i.quantity + 1 }
-                  : i
-              )
-            };
-          }
+  const addToCart = async (product) => {
+    const token = localStorage.getItem("token");
+
+    console.log("🛒 addToCart called, token:", !!token, "product:", product._id);
+
+    if (!token) {
+      setCart((prev) => {
+        const items = prev?.items || [];
+        const existing = items.find((i) => i.productId === product._id);
+        if (existing) {
           return {
             ...prev,
-            items: [
-              ...items,
-              {
-                productId: product._id,
-                name: product.name,
-                price: product.sellingPrice || product.price,
-                image: product.image,
-                quantity: 1
-              }
-            ]
+            items: items.map((i) =>
+              i.productId === product._id ? { ...i, quantity: i.quantity + 1 } : i
+            ),
           };
-        });
-        return;
-      }
-
-      const response = await API.post("/cart/add", {
-        productId: product._id,
-        name: product.name,
-        price: product.sellingPrice || product.price,
-        image: product.image,
-        quantity: 1
+        }
+        return {
+          ...prev,
+          items: [...items, {
+            productId: product._id,
+            name: product.name,
+            price: product.sellingPrice || product.price,
+            image: product.image,
+            quantity: 1,
+          }],
+        };
       });
-
-      setCart(response.data);
-    } catch (error) {
-      console.error("Failed to add to cart:", error);
+      return;
     }
+
+    console.log("📡 Calling POST /cart/add...");
+    const res = await API.post("/cart/add", {
+      productId: product._id,
+      name: product.name,
+      price: product.sellingPrice || product.price,
+      image: product.image,
+      quantity: 1,
+    });
+
+    console.log("✅ Add to cart response:", res.data);
+    setCart(res.data);
   };
 
   const removeFromCart = async (productId) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setCart((prev) => ({
+        ...prev,
+        items: (prev?.items || []).filter((i) => i.productId !== productId),
+      }));
+      return;
+    }
     try {
-      const token = localStorage.getItem('token');
+      const res = await API.delete(`/cart/remove/${productId}`);
+      console.log("✅ Remove success:", res.data);
+      setCart(res.data);
+    } catch (err) {
+      console.error("❌ Remove error:", err?.response?.data);
+    }
+  };
 
-      if (!token) {
-        // Guest remove — update locally
-        setCart(prev => ({
-          ...prev,
-          items: (prev?.items || []).filter(i => i.productId !== productId)
-        }));
-        return;
+  // ✅ refreshCart — re-fetches cart from DB on demand
+  const refreshCart = async () => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      try {
+        const res = await API.get("/cart");
+        console.log("🔄 Cart refreshed:", res.data);
+        setCart(res.data || { items: [], totalAmount: 0 });
+      } catch (err) {
+        console.error("❌ Refresh error:", err?.response?.data);
       }
-
-      const response = await API.delete(`/cart/remove/${productId}`);
-      setCart(response.data);
-    } catch (error) {
-      console.error("Remove failed:", error);
     }
   };
 
   return (
-    <CartContext.Provider value={{ cart, cartCount, addToCart, removeFromCart }}>
+    <CartContext.Provider value={{ cart, cartCount, addToCart, removeFromCart, refreshCart }}>
       {children}
     </CartContext.Provider>
   );
