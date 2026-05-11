@@ -8,6 +8,8 @@ export const createMedicine = async (req, res) => {
       brand,
       category,
       description,
+      howToUse,
+      safetyInfo,
       dosage,
       sideEffects,
       expiryDate,
@@ -16,30 +18,49 @@ export const createMedicine = async (req, res) => {
       buyingPrice,
       sellingPrice,
       price,
+      unitPrice,
       stock,
       sku,
       supplier,
+      dispensedBy,
     } = req.body;
 
-    const imagePath = req.file ? req.file.path.replace(/\\/g, "/") : null;
+    // ✅ Fix: use req.files (upload.fields) instead of req.file (upload.single)
+    const imagePath = req.files?.image?.[0]
+      ? req.files.image[0].path.replace(/\\/g, "/")
+      : null;
+
+    const additionalImages = req.files?.additionalImages
+      ? req.files.additionalImages.map((f) => f.path.replace(/\\/g, "/"))
+      : [];
 
     const medicine = await Medicine.create({
       name,
       brand,
-      category,
+      category, // Validated against the 8 categories in your model
       description,
+      howToUse,
+      safetyInfo,
       dosage,
-      sideEffects: sideEffects ? (Array.isArray(sideEffects) ? sideEffects : [sideEffects]) : [],
+      sideEffects: sideEffects
+        ? Array.isArray(sideEffects)
+          ? sideEffects
+          : [sideEffects]
+        : [],
       expiryDate,
-      prescriptionRequired: prescriptionRequired === 'true' || prescriptionRequired === true,
+      prescriptionRequired:
+        prescriptionRequired === "true" || prescriptionRequired === true,
       prescriptionType,
       buyingPrice: Number(buyingPrice) || 0,
       sellingPrice: Number(sellingPrice) || Number(price) || 0,
       price: Number(price) || Number(sellingPrice) || 0,
+      unitPrice: Number(unitPrice) || 0,
       stock: Number(stock) || 0,
       sku,
       supplier,
+      dispensedBy,
       image: imagePath,
+      additionalImages,
       sellerId: req.user?._id,
     });
 
@@ -58,18 +79,29 @@ export const updateMedicine = async (req, res) => {
   try {
     const updates = { ...req.body };
 
-    if (req.file) {
-      updates.image = req.file.path.replace(/\\/g, "/");
+    // ✅ Handle multiple file uploads during update
+    if (req.files?.image?.[0]) {
+      updates.image = req.files.image[0].path.replace(/\\/g, "/");
     }
 
+    if (req.files?.additionalImages?.length > 0) {
+      updates.additionalImages = req.files.additionalImages.map((f) =>
+        f.path.replace(/\\/g, "/")
+      );
+    }
+
+    // Convert numeric fields to prevent string errors in MongoDB
     if (updates.buyingPrice) updates.buyingPrice = Number(updates.buyingPrice);
     if (updates.sellingPrice) updates.sellingPrice = Number(updates.sellingPrice);
     if (updates.price) updates.price = Number(updates.price);
+    if (updates.unitPrice) updates.unitPrice = Number(updates.unitPrice);
     if (updates.stock) updates.stock = Number(updates.stock);
-    
-    // Handle boolean conversion for prescription if it comes as a string
-    if (updates.prescriptionRequired) {
-      updates.prescriptionRequired = updates.prescriptionRequired === 'true' || updates.prescriptionRequired === true;
+
+    // Handle boolean conversion for prescription logic
+    if (updates.prescriptionRequired !== undefined) {
+      updates.prescriptionRequired =
+        updates.prescriptionRequired === "true" ||
+        updates.prescriptionRequired === true;
     }
 
     const medicine = await Medicine.findByIdAndUpdate(
@@ -92,7 +124,7 @@ export const updateMedicine = async (req, res) => {
   }
 };
 
-// ✅ GET ALL MEDICINES (RESTORED)
+// ✅ GET ALL MEDICINES
 export const getAllMedicines = async (req, res) => {
   try {
     const medicines = await Medicine.find().sort({ createdAt: -1 });
@@ -127,7 +159,7 @@ export const deleteMedicine = async (req, res) => {
   }
 };
 
-// ✅ GET BY CATEGORY
+// ✅ GET BY CATEGORY (Handles the 8 new categories)
 export const getMedicinesByCategory = async (req, res) => {
   try {
     const medicines = await Medicine.find({ category: req.params.category });

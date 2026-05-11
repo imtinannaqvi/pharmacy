@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import API from "../api/axios"; 
 import Header from "./Header";
-import { ImagePlus, Trash2, Edit, ShoppingCart } from "lucide-react"; 
+import { ImagePlus, Trash2, Edit, ShoppingCart, FileText, X } from "lucide-react"; 
 import { useCart } from "../context/CartContext";
 import { toast } from "react-hot-toast";
 
@@ -12,16 +12,40 @@ const Products = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(null); 
-  const [addingToCart, setAddingToCart] = useState(null); // ✅ track which item is being added
+  const [addingToCart, setAddingToCart] = useState(null); 
   
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+
+  // Additional images state
+  const [additionalImages, setAdditionalImages] = useState([]);
+  const [additionalPreviews, setAdditionalPreviews] = useState([]);
+
+  // --- NEW CATEGORIES LIST ---
+  const categories = [
+    "Botulinum Toxins",
+    "Dermal Fillers",
+    "Skin Boosters",
+    "Fat Dissolvers",
+    "Mesotherapy",
+    "Anesthetics",
+    "Skincare",
+    "Consumables"
+  ];
+
+  // --- NEW FILTER STATE ---
+  const [selectedCategory, setSelectedCategory] = useState("All");
 
   const [formData, setFormData] = useState({
     name: "",
     brand: "",
     category: "Botulinum Toxins",
     description: "",
+    howToUse: "",
+    safetyInfo: "",
+    prescriptionRequired: false,
+    unitPrice: "",
+    dispensedBy: "",
     dosage: "",
     buyingPrice: "",
     sellingPrice: "",
@@ -50,20 +74,21 @@ const Products = () => {
     fetchProducts();
   }, []);
 
-  // ✅ Fixed handleAddToCart with guard + loading state
+  // --- FILTERED PRODUCTS LOGIC ---
+  const filteredProducts = selectedCategory === "All" 
+    ? products 
+    : products.filter(p => p.category === selectedCategory);
+
   const handleAddToCart = async (product) => {
-    // Guard: make sure product has _id
     if (!product._id) {
       toast.error("Invalid product.");
       return;
     }
-
-    // Prevent double-click
     if (addingToCart === product._id) return;
 
     setAddingToCart(product._id);
     try {
-await addToCart(product);
+      await addToCart(product);
       toast.success(`${product.name} added to cart!`);
     } catch (error) {
       console.error("Add to cart error:", error?.response?.data || error.message);
@@ -80,6 +105,11 @@ await addToCart(product);
       brand: product.brand || "",
       category: product.category || "Botulinum Toxins",
       description: product.description || "",
+      howToUse: product.howToUse || "",
+      safetyInfo: product.safetyInfo || "",
+      prescriptionRequired: product.prescriptionRequired || false,
+      unitPrice: product.unitPrice || product.sellingPrice || "",
+      dispensedBy: product.dispensedBy || "",
       dosage: product.dosage || "",
       buyingPrice: product.buyingPrice || "",
       sellingPrice: product.sellingPrice || product.price || "",
@@ -88,9 +118,20 @@ await addToCart(product);
       sku: product.sku || "",
       supplier: product.supplier || ""
     });
+
     if (product.image) {
       setPreviewUrl(`http://localhost:4000/${product.image}`);
     }
+
+    if (product.additionalImages && Array.isArray(product.additionalImages)) {
+      const existingPreviews = product.additionalImages.map(
+        (img) => `http://localhost:4000/${img}`
+      );
+      setAdditionalPreviews(existingPreviews);
+    } else {
+      setAdditionalPreviews([]);
+    }
+
     setIsModalOpen(true);
   };
 
@@ -108,7 +149,11 @@ await addToCart(product);
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value, type, checked } = e.target;
+    setFormData({ 
+      ...formData, 
+      [name]: type === 'checkbox' ? checked : value 
+    });
   };
 
   const handleFileChange = (e) => {
@@ -117,6 +162,23 @@ await addToCart(product);
       setImageFile(file);
       setPreviewUrl(URL.createObjectURL(file));
     }
+  };
+
+  const handleAdditionalFiles = (e) => {
+    const files = Array.from(e.target.files);
+    if (additionalPreviews.length + files.length > 3) {
+      toast.error("Maximum 3 additional images allowed");
+      return;
+    }
+    
+    setAdditionalImages(prev => [...prev, ...files]);
+    const newPreviews = files.map(file => URL.createObjectURL(file));
+    setAdditionalPreviews(prev => [...prev, ...newPreviews]);
+  };
+
+  const removeAdditionalImage = (index) => {
+    setAdditionalPreviews(prev => prev.filter((_, i) => i !== index));
+    setAdditionalImages(prev => prev.filter((_, i) => i !== (index - (additionalPreviews.length - additionalImages.length))));
   };
 
   const handleSubmit = async (e) => {
@@ -136,8 +198,18 @@ await addToCart(product);
       data.append("image", imageFile); 
     }
 
+    additionalImages.forEach((file) => {
+      data.append("additionalImages", file);
+    });
+
     try {
-      const config = { headers: { "Content-Type": "multipart/form-data" } };
+      const token = localStorage.getItem("token");
+      const config = { 
+        headers: { 
+          "Content-Type": "multipart/form-data",
+          "Authorization": `Bearer ${token}` 
+        } 
+      };
 
       if (selectedId) {
         const response = await API.put(`/medicines/${selectedId}`, data, config);
@@ -153,7 +225,10 @@ await addToCart(product);
       closeModal();
     } catch (error) {
       console.error("Error saving product:", error);
-      toast.error("Error saving: Check all numeric fields.");
+      const errorMsg = error.response?.status === 401 
+        ? "Unauthorized: Please log in again." 
+        : "Error saving: Check all numeric fields.";
+      toast.error(errorMsg);
     }
   };
 
@@ -162,8 +237,12 @@ await addToCart(product);
     setSelectedId(null);
     setImageFile(null);
     setPreviewUrl(null);
+    setAdditionalImages([]);
+    setAdditionalPreviews([]);
     setFormData({
       name: "", brand: "", category: "Botulinum Toxins", description: "",
+      howToUse: "", safetyInfo: "", prescriptionRequired: false,
+      unitPrice: "", dispensedBy: "",
       dosage: "", buyingPrice: "", sellingPrice: "", stock: "",
       expiryDate: "", sku: "", supplier: ""
     });
@@ -197,6 +276,25 @@ await addToCart(product);
           </button>
         </div>
 
+        {/* --- NEW CATEGORY FILTER BAR --- */}
+        <div className="flex gap-2 overflow-x-auto pb-6 mb-4 no-scrollbar">
+          <button 
+            onClick={() => setSelectedCategory("All")}
+            className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategory === "All" ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-100' : 'bg-white text-gray-400 border border-gray-100'}`}
+          >
+            All Items
+          </button>
+          {categories.map(cat => (
+            <button 
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${selectedCategory === cat ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-100' : 'bg-white text-gray-400 border border-gray-100'}`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
         <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -212,43 +310,31 @@ await addToCart(product);
             <tbody className="divide-y divide-gray-50">
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="text-center py-20 font-bold italic text-gray-400">
-                    Syncing with API...
-                  </td>
+                  <td colSpan="6" className="text-center py-20 font-bold italic text-gray-400">Syncing with API...</td>
                 </tr>
-              ) : products.length === 0 ? (
+              ) : filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="text-center py-20 font-bold italic text-gray-400">
-                    No products found.
-                  </td>
+                  <td colSpan="6" className="text-center py-20 font-bold italic text-gray-400">No products found in this category.</td>
                 </tr>
-              ) : products.map((item) => (
+              ) : filteredProducts.map((item) => (
                 <tr key={item._id} className="hover:bg-gray-50/50 transition-all group">
                   <td className="py-4 px-6">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center overflow-hidden border border-gray-100">
                         {item.image ? (
-                          <img 
-                            src={`http://localhost:4000/${item.image}`} 
-                            alt={item.name} 
-                            className="w-full h-full object-cover"
-                          />
+                          <img src={`http://localhost:4000/${item.image}`} alt={item.name} className="w-full h-full object-cover" />
                         ) : (
                           <span className="text-xl">📦</span>
                         )}
                       </div>
                       <div className="flex flex-col">
                         <span className="font-extrabold text-gray-900 text-sm">{item.name}</span>
-                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
-                          {item.sku || "NO-SKU-ASSIGNED"}
-                        </span>
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{item.sku || "NO-SKU-ASSIGNED"}</span>
                       </div>
                     </div>
                   </td>
                   <td className="py-4 px-6">
-                    <span className="text-[10px] bg-cyan-50 text-cyan-600 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider">
-                      {item.category}
-                    </span>
+                    <span className="text-[10px] bg-cyan-50 text-cyan-600 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider">{item.category}</span>
                   </td>
                   <td className="py-4 px-6">
                     <div className="flex flex-col">
@@ -258,9 +344,7 @@ await addToCart(product);
                   </td>
                   <td className="py-4 px-6">
                     <span className={`text-xs font-black ${item.buyingPrice ? 'text-green-600' : 'text-gray-300'}`}>
-                      {item.buyingPrice 
-                        ? (((item.sellingPrice - item.buyingPrice) / item.sellingPrice) * 100).toFixed(0) 
-                        : 0}%
+                      {item.buyingPrice ? (((item.sellingPrice - item.buyingPrice) / item.sellingPrice) * 100).toFixed(0) : 0}%
                     </span>
                   </td>
                   <td className="py-4 px-6">
@@ -270,36 +354,11 @@ await addToCart(product);
                   </td>
                   <td className="py-4 px-6 text-right">
                     <div className="flex justify-end gap-3">
-                      {/* ✅ Cart button with loading spinner */}
-                      <button 
-                        onClick={() => handleAddToCart(item)} 
-                        disabled={addingToCart === item._id}
-                        className={`p-2 rounded-lg transition-all ${
-                          addingToCart === item._id
-                            ? 'text-gray-300 cursor-not-allowed'
-                            : 'text-green-500 hover:bg-green-50'
-                        }`}
-                        title="Add to Cart"
-                      >
-                        {addingToCart === item._id 
-                          ? <span className="text-xs font-bold">...</span>
-                          : <ShoppingCart size={18}/>
-                        }
+                      <button onClick={() => handleAddToCart(item)} disabled={addingToCart === item._id} className={`p-2 rounded-lg transition-all ${addingToCart === item._id ? 'text-gray-300 cursor-not-allowed' : 'text-green-500 hover:bg-green-50'}`}>
+                        {addingToCart === item._id ? <span className="text-xs font-bold">...</span> : <ShoppingCart size={18}/>}
                       </button>
-
-                      <button 
-                        onClick={() => handleEdit(item)} 
-                        className="p-2 text-cyan-500 hover:bg-cyan-50 rounded-lg transition-all"
-                      >
-                        <Edit size={18}/>
-                      </button>
-                      
-                      <button 
-                        onClick={() => handleDelete(item._id)} 
-                        className="p-2 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                      >
-                        <Trash2 size={18}/>
-                      </button>
+                      <button onClick={() => handleEdit(item)} className="p-2 text-cyan-500 hover:bg-cyan-50 rounded-lg transition-all"><Edit size={18}/></button>
+                      <button onClick={() => handleDelete(item._id)} className="p-2 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18}/></button>
                     </div>
                   </td>
                 </tr>
@@ -322,7 +381,7 @@ await addToCart(product);
             <form onSubmit={handleSubmit} className="flex flex-col lg:flex-row gap-10">
               <div className="w-full lg:w-5/12 space-y-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest">Product Visualization</label>
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest">Main Product View</label>
                   <div 
                     onClick={() => document.getElementById('imageInput').click()}
                     className="w-full aspect-square bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2.5rem] flex flex-col items-center justify-center hover:border-cyan-400 transition-all group cursor-pointer overflow-hidden relative"
@@ -332,40 +391,103 @@ await addToCart(product);
                     ) : (
                       <div className="text-center">
                         <ImagePlus className="text-gray-300 group-hover:text-cyan-400 transition-colors mb-2 mx-auto" size={48} />
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-cyan-500">Attach Product Image</span>
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover:text-cyan-500">Attach Main Image</span>
                       </div>
                     )}
                     <input id="imageInput" type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
                   </div>
                 </div>
+
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest">Additional Angles (Max 3)</label>
+                    <div className="grid grid-cols-3 gap-3">
+                        {additionalPreviews.map((url, idx) => (
+                            <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border border-gray-100 group">
+                                <img src={url} className="w-full h-full object-cover" alt={`Preview ${idx}`} />
+                                <button type="button" onClick={() => removeAdditionalImage(idx)} className="absolute top-1 right-1 p-1 bg-white/80 rounded-full text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        ))}
+                        {additionalPreviews.length < 3 && (
+                            <button 
+                                type="button" 
+                                onClick={() => document.getElementById('additionalImagesInput').click()}
+                                className="aspect-square bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl flex items-center justify-center hover:border-cyan-400 transition-all text-gray-300 hover:text-cyan-400"
+                            >
+                                <ImagePlus size={24} />
+                                <input id="additionalImagesInput" type="file" accept="image/*" multiple className="hidden" onChange={handleAdditionalFiles} />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">General Description</label>
+                    <textarea name="description" value={formData.description} onChange={handleChange} className="w-full bg-gray-50 border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold min-h-[100px]" placeholder="Detailed product info..."/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">How to Use</label>
+                    <textarea name="howToUse" value={formData.howToUse} onChange={handleChange} className="w-full bg-gray-50 border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold min-h-[80px]" placeholder="Usage instructions..."/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Safety & Warnings</label>
+                    <textarea name="safetyInfo" value={formData.safetyInfo} onChange={handleChange} className="w-full bg-gray-50 border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold min-h-[80px]" placeholder="Safety warnings..."/>
+                  </div>
+                </div>
               </div>
 
               <div className="w-full lg:w-7/12 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Official Name</label>
-                    <input name="name" required value={formData.name} onChange={handleChange} className="w-full bg-gray-50 border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold" placeholder="e.g. Neuramis Deep"/>
+                <div className="bg-gray-50/50 p-6 rounded-[1.5rem] border border-gray-100 space-y-4">
+                  <h3 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Product Specifications</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Product Name</label>
+                      <input name="name" required value={formData.name} onChange={handleChange} className="w-full bg-white border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold" placeholder="e.g. Neuramis Deep"/>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 ml-1">SKU</label>
+                      <input name="sku" required value={formData.sku} onChange={handleChange} className="w-full bg-white border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold" placeholder="BATCH-001"/>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Manufacturer</label>
-                    <input name="brand" required value={formData.brand} onChange={handleChange} className="w-full bg-gray-50 border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold" placeholder="e.g. Hugel Pharma"/>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Category</label>
+                      <select name="category" required value={formData.category} onChange={handleChange} className="w-full bg-white border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold">
+                        {/* --- UPDATED DYNAMIC OPTIONS --- */}
+                        {categories.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-3 pt-5 pl-2">
+                      <input type="checkbox" name="prescriptionRequired" id="prescriptionRequired" checked={formData.prescriptionRequired} onChange={handleChange} className="w-5 h-5 accent-cyan-500 rounded cursor-pointer" />
+                      <label htmlFor="prescriptionRequired" className="text-xs font-black text-gray-700 uppercase cursor-pointer flex items-center gap-2"><FileText size={14} className="text-red-500" /> Prescription Required?</label>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Unit Price (£)</label>
+                      <input name="unitPrice" type="number" step="0.01" required value={formData.unitPrice} onChange={handleChange} className="w-full bg-white border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold" placeholder="0.00" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Supplied By</label>
+                      <input name="supplier" required value={formData.supplier} onChange={handleChange} className="w-full bg-white border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold" placeholder="Wholesaler Name" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Dispensed By</label>
+                      <input name="dispensedBy" required value={formData.dispensedBy} onChange={handleChange} className="w-full bg-white border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold" placeholder="Pharmacist" />
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Category</label>
-                    <select name="category" value={formData.category} onChange={handleChange} className="w-full bg-gray-50 border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold">
-                      <option>Botulinum Toxins</option>
-                      <option>Dermal Fillers</option>
-                      <option>Skin Boosters</option>
-                      <option>Fat Dissolvers</option>
-                      <option>Consumables</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">SKU Identification</label>
-                    <input name="sku" value={formData.sku} onChange={handleChange} className="w-full bg-gray-50 border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold" placeholder="BATCH-001"/>
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Manufacturer/Brand</label>
+                    <input name="brand" required value={formData.brand} onChange={handleChange} className="w-full bg-gray-50 border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold" placeholder="e.g. Hugel Pharma"/>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Expiration</label>
@@ -386,9 +508,7 @@ await addToCart(product);
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-gray-500">Est. Margin</label>
-                      <div className="w-full bg-white border border-cyan-100 rounded-xl px-4 py-3 text-sm font-black text-green-600 text-center">
-                        {calculateMargin()}%
-                      </div>
+                      <div className="w-full bg-white border border-cyan-100 rounded-xl px-4 py-3 text-sm font-black text-green-600 text-center">{calculateMargin()}%</div>
                     </div>
                   </div>
                 </div>
@@ -399,16 +519,14 @@ await addToCart(product);
                     <input name="stock" type="number" required value={formData.stock} onChange={handleChange} className="w-full bg-gray-50 border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold" placeholder="Units available" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Supplier</label>
-                    <input name="supplier" value={formData.supplier} onChange={handleChange} className="w-full bg-gray-50 border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold" placeholder="Medical Wholesaler Name" />
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Dosage/Strength</label>
+                    <input name="dosage" value={formData.dosage} onChange={handleChange} className="w-full bg-gray-50 border-2 border-transparent focus:border-cyan-400 rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold" placeholder="e.g. 100 Units" />
                   </div>
                 </div>
 
                 <div className="flex gap-4 pt-4">
                   <button type="button" onClick={closeModal} className="flex-1 py-4 text-gray-400 font-bold hover:text-gray-600 transition-all uppercase text-[10px] tracking-widest">Discard Changes</button>
-                  <button type="submit" className="flex-[2] py-4 bg-cyan-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-cyan-600 transition-all shadow-xl shadow-cyan-100">
-                    {selectedId ? "Commit Updates" : "Add to Inventory"}
-                  </button>
+                  <button type="submit" className="flex-[2] py-4 bg-cyan-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-cyan-600 transition-all shadow-xl shadow-cyan-100">{selectedId ? "Commit Updates" : "Add to Inventory"}</button>
                 </div>
               </div>
             </form>

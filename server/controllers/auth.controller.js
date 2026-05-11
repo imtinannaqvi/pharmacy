@@ -5,35 +5,44 @@ import crypto from "crypto";
 import sendEmail from "../utils/sendEmail.js";
 
 // ── Register ──────────────────────────────────────────────────────────────────
+// auth.controller.js
+
 export const register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { 
+      email, password, firstName, lastName, accountType 
+    } = req.body;
 
     const existing = await User.findOne({ email });
-    if (existing)
-      return res.status(400).json({ message: "Email already exists" });
+    if (existing) return res.status(400).json({ message: "Email already exists" });
 
     const hashed = await bcrypt.hash(password, 10);
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     const user = await User.create({
-      name,
-      email,
+      ...req.body,
+      name: `${firstName} ${lastName}`,
       password: hashed,
       otp,
       otpExpire: Date.now() + 10 * 60 * 1000,
     });
 
+    // ✅ ADD THIS BLOCK BELOW
     try {
-      await sendEmail(email, "Verify Your Email", `
-        <h2>Welcome to DrGPharma!</h2>
-        <p>Your verification code is:</p>
-        <h1 style="letter-spacing:8px">${otp}</h1>
-        <p>Expires in 10 minutes.</p>
+      await sendEmail(email, "Verify Your Email - DrGPharma", `
+        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h2 style="color: #0d9488;">Welcome to DrGPharma</h2>
+          <p>Thank you for registering. Please use the following code to verify your account:</p>
+          <div style="background: #f1f5f9; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #0f172a; border-radius: 8px;">
+            ${otp}
+          </div>
+          <p style="color: #64748b; font-size: 12px; margin-top: 20px;">This code expires in 10 minutes.</p>
+        </div>
       `);
-    } catch (err) {
-      await User.findByIdAndDelete(user._id);
-      return res.status(500).json({ message: "Failed to send OTP email. Try again." });
+    } catch (mailError) {
+      // If email fails, we should probably delete the user or handle it
+      console.error("Mail Send Error:", mailError);
+      return res.status(500).json({ message: "User created but failed to send OTP email." });
     }
 
     res.status(201).json({ message: "OTP sent to your email." });

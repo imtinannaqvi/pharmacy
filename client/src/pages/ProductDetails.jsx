@@ -1,124 +1,228 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { 
+  ShoppingCart, ArrowLeft, Beaker, AlertCircle, 
+  FileText, Calendar, HardDrive, Factory, 
+  Layers, TrendingUp, ChevronRight
+} from 'lucide-react';
 import API from '../api/axios';
-import { ShoppingCart, ArrowLeft, Minus, Plus, ShieldCheck, Truck } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { toast } from 'react-hot-toast';
 
 const ProductDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { addToCart } = useCart();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
-  const { addToCart } = useCart();
+  const [activeImage, setActiveImage] = useState(null);
 
   useEffect(() => {
     const fetchProduct = async () => {
-      setLoading(true);
       try {
-        const res = await API.get(`/medicines/${id}`); 
-        const data = res.data.medicine || res.data;
+        const response = await API.get(`/medicines/${id}`);
+        const data = response.data.medicine || response.data;
         setProduct(data);
-      } catch (err) {
-        console.error("Error fetching product:", err);
-        setProduct(null);
-      } finally {
+        setActiveImage(data.image || data.primaryImage); 
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching product details:", error);
+        toast.error("Product not found");
         setLoading(false);
       }
     };
-    if (id) fetchProduct();
+    fetchProduct();
   }, [id]);
 
-  const handleQuantity = (type) => {
-    if (type === 'plus' && quantity < (product?.stock || 10)) setQuantity(prev => prev + 1);
-    if (type === 'minus' && quantity > 1) setQuantity(prev => prev - 1);
+  const handleAddToCart = async () => {
+    try {
+      await addToCart({ ...product, quantity });
+      toast.success(`${product.name} added to cart!`);
+    } catch (error) {
+      toast.error("Failed to add to cart");
+    }
   };
 
-  // Helper to handle both adding and navigating
-  const handleAddToCart = () => {
-    addToCart({ ...product, quantity });
-    navigate('/cart'); // Change this string if your cart route is different (e.g., '/checkout')
+  // ✅ Updated navigation to the correct form route
+  const handlePrescriptionRedirect = () => {
+    navigate(`/prescription-form`);
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="w-6 h-6 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-cyan-600"></div>
     </div>
   );
 
-  if (!product) return (
-    <div className="max-w-xl mx-auto py-16 text-center">
-      <h2 className="text-xl font-bold text-gray-800 mb-3">Medicine not found</h2>
-      <button onClick={() => navigate('/home')} className="text-green-600 text-sm font-semibold hover:underline">Return to Shop</button>
-    </div>
-  );
+  if (!product) return <div className="text-center py-20 font-bold">Product not found.</div>;
+
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return "https://via.placeholder.com/500?text=No+Image";
+    if (imagePath.startsWith('http')) return imagePath;
+    const cleanPath = imagePath.startsWith('/') ? imagePath.substring(1) : imagePath;
+    return `http://localhost:4000/${cleanPath}`;
+  };
+
+  const extraImages = product.additionalImages || product.images || [];
+  const allImages = [product.image || product.primaryImage, ...extraImages].filter(Boolean);
+
+  const usageText = product.howToUse || product.usageInstructions || product.instructions;
+  const safetyText = product.safetyInfo || product.safetyWarnings || product.precautions || product.safetyAndWarnings;
 
   return (
-    <div className="bg-white min-h-screen font-poppins text-gray-900">
-      <div className="max-w-6xl mx-auto px-6 py-6">
-        <button onClick={() => navigate(-1)} className="group flex items-center gap-2 text-xs text-gray-400 mb-6 hover:text-gray-900 transition-colors">
-          <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
-          Back
-        </button>
+    <div className="max-w-6xl mx-auto px-4 py-8 bg-white font-poppins">
+      <button 
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-2 text-gray-500 hover:text-cyan-600 transition-colors mb-6 font-semibold text-sm"
+      >
+        <ArrowLeft className="w-4 h-4" /> Back to Inventory
+      </button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          <div className="lg:col-span-6">
-            <div className="sticky top-6 bg-[#fbfbfb] rounded-xl p-8 border border-gray-100 flex items-center justify-center overflow-hidden">
-              <img 
-                src={product.image ? `http://localhost:4000/${product.image}` : '/placeholder.png'} 
-                alt={product.name} 
-                className="w-full max-h-[350px] object-contain mix-blend-multiply transition-transform duration-700 hover:scale-105"
-              />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+        
+        {/* Left: Gallery Side */}
+        <div className="space-y-4">
+          <div className="bg-gray-50 rounded-2xl p-6 flex items-center justify-center border border-gray-100 aspect-square relative overflow-hidden">
+            <img 
+              src={getImageUrl(activeImage)} 
+              alt={product.name} 
+              className="max-h-full w-auto object-contain transition-transform duration-500 hover:scale-105"
+            />
+          </div>
+          
+          <div className="flex gap-3 overflow-x-auto py-2">
+            {allImages.map((img, idx) => (
+              <button 
+                key={idx}
+                onClick={() => setActiveImage(img)}
+                className={`w-20 h-20 rounded-xl border-2 overflow-hidden flex-shrink-0 transition-all ${activeImage === img ? 'border-cyan-500 scale-105 shadow-md' : 'border-transparent bg-gray-50 opacity-70 hover:opacity-100'}`}
+              >
+                <img src={getImageUrl(img)} className="w-full h-full object-cover" alt={`View ${idx}`} />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Right: Detailed Side */}
+        <div className="flex flex-col">
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="bg-cyan-50 text-cyan-700 px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                {product.category || 'Clinical Medicine'}
+              </span>
+              
+              {product.prescriptionRequired ? (
+                <span className="bg-red-50 text-red-600 px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 border border-red-100">
+                  <FileText size={12} /> Prescription Required
+                </span>
+              ) : (
+                <span className="bg-green-50 text-green-600 px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-green-100">
+                  OTC (No Prescription)
+                </span>
+              )}
+              
+              <span className="text-gray-400 text-[10px] font-bold uppercase tracking-widest ml-auto">SKU: {product.sku || 'N/A'}</span>
+            </div>
+            
+            <h1 className="text-3xl font-bold text-gray-900 mb-2 leading-tight">
+              {product.name}
+            </h1>
+            
+            <div className="flex flex-wrap items-center gap-4 text-xs">
+              <div className="flex items-center gap-1.5 text-gray-500">
+                <Factory size={14} />
+                <span>Brand: <b className="text-gray-800">{product.brand || 'N/A'}</b></span>
+              </div>
+              <div className="flex items-center gap-1.5 text-gray-500">
+                <Layers size={14} />
+                <span>Supplier: <b className="text-gray-800">{product.supplier || 'N/A'}</b></span>
+              </div>
             </div>
           </div>
 
-          <div className="lg:col-span-6 space-y-5">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-green-600 bg-green-50 px-2 py-0.5 rounded">
-                  {product.category || 'Pharmaceutical'}
-                </span>
+          {/* Pricing & Stock Stats */}
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+              <label className="text-[9px] font-bold text-gray-400 uppercase block mb-1">Retail Price</label>
+              <span className="text-lg font-bold text-gray-900">£{(product.sellingPrice || product.price || 0).toFixed(2)}</span>
+            </div>
+            
+            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+              <label className="text-[9px] font-bold text-gray-400 uppercase block mb-1">Stock Status</label>
+              <span className="text-lg font-bold text-gray-900">{product.stock || 0} Units</span>
+            </div>
+          </div>
+
+          {/* Product Specs */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-xl">
+              <Beaker size={18} className="text-cyan-500" />
+              <div>
+                <p className="text-[9px] text-gray-400 font-bold uppercase">Strength</p>
+                <p className="text-xs font-bold">{product.dosage || 'N/A'}</p>
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 leading-tight">{product.name}</h1>
-              <p className="text-xs font-medium text-gray-400">Brand: {product.brand || 'Medico Guidance'}</p>
             </div>
-
-            <div className="flex items-baseline gap-3 py-3 border-y border-gray-50">
-              <span className="text-2xl font-bold text-gray-900">£{product.sellingPrice || product.price}</span>
-              {product.price > (product.sellingPrice || 0) && (
-                <span className="text-sm text-gray-300 line-through">£{product.price}</span>
-              )}
+            <div className="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-xl">
+              <Calendar size={18} className="text-cyan-500" />
+              <div>
+                <p className="text-[9px] text-gray-400 font-bold uppercase">Expiry</p>
+                <p className="text-xs font-bold">{product.expiryDate ? new Date(product.expiryDate).toLocaleDateString() : 'N/A'}</p>
+              </div>
             </div>
+          </div>
 
-            <div className="space-y-1">
-              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-tighter">Description</h3>
-              <p className="text-xs leading-relaxed text-gray-500 max-w-sm">
-                {product.description || "High-quality pharmaceutical product prepared under strict medical standards."}
+          {/* Detailed Text Sections */}
+          <div className="space-y-4 mb-8">
+            <div>
+              <h3 className="text-xs font-bold uppercase text-gray-900 mb-2 flex items-center gap-2">
+                <HardDrive size={14} className="text-cyan-500" /> Description
+              </h3>
+              <p className="text-gray-600 text-sm leading-relaxed">
+                {product.description || "No description provided."}
               </p>
             </div>
 
-            <div className="space-y-4 pt-2">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center border border-gray-200 rounded-lg px-1 bg-white">
-                  <button onClick={() => handleQuantity('minus')} className="p-1.5 text-gray-400 hover:text-gray-900"><Minus size={14} /></button>
-                  <span className="w-8 text-center font-bold text-xs">{quantity}</span>
-                  <button onClick={() => handleQuantity('plus')} className="p-1.5 text-gray-400 hover:text-gray-900"><Plus size={14} /></button>
-                </div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase">
-                  {product.stock > 0 ? `${product.stock} in stock` : <span className="text-red-500">Out of stock</span>}
+            {usageText && (
+              <div className="bg-cyan-50/50 p-4 rounded-xl border border-cyan-100">
+                <h3 className="text-[10px] font-bold uppercase text-cyan-700 mb-1">Usage Instructions</h3>
+                <p className="text-cyan-900 text-xs leading-relaxed font-medium">
+                  {usageText}
                 </p>
               </div>
+            )}
 
-              <div className="flex gap-3">
-                <button 
-                  disabled={product.stock <= 0}
-                  onClick={handleAddToCart}
-                  className="flex-1 bg-gray-900 text-white py-3 rounded-lg font-bold text-xs flex items-center justify-center gap-2 hover:bg-black transition-all active:scale-95 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
-                >
-                  <ShoppingCart size={16} />
-                  {product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
-                </button>
+            {safetyText && (
+              <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100">
+                <h3 className="text-[10px] font-bold uppercase text-orange-700 mb-1 flex items-center gap-1">
+                  <AlertCircle size={12} /> Safety & Precautions
+                </h3>
+                <p className="text-orange-900 text-xs leading-relaxed font-medium">
+                  {safetyText}
+                </p>
               </div>
+            )}
+          </div>
+
+          {/* Action Footer */}
+          <div className="flex flex-col gap-3 mt-auto">
+            <div className="flex gap-3">
+              <div className="flex items-center border border-gray-200 rounded-xl bg-white h-12">
+                <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="px-4 font-bold hover:text-cyan-600">-</button>
+                <span className="px-2 min-w-[30px] text-center font-bold text-sm">{quantity}</span>
+                <button onClick={() => setQuantity(q => q + 1)} className="px-4 font-bold hover:text-cyan-600">+</button>
+              </div>
+              
+              {product.prescriptionRequired && (
+                <button 
+                  onClick={handlePrescriptionRedirect}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-white text-red-600 border border-red-200 rounded-xl font-bold uppercase text-[10px] tracking-widest hover:bg-red-50 transition-all mb-1 group"
+                >
+                  <FileText size={14} /> 
+                  Add Prescription Details
+                  <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -1,25 +1,26 @@
 import express from "express";
-import { 
-  uploadPrescription, 
-  getPendingPrescriptions, 
-  verifyPrescription, 
-  checkUserPrescriptionStatus 
-} from "../controllers/prescription.controller.js"; // Path to your controller
-import upload from "../middleware/multer.js"; // Path to your Multer file
-import { auth, adminOnly } from "../middleware/authMiddleware.js"; // Your auth logic
+import {
+  uploadPrescription,
+  getPendingPrescriptions,
+  verifyPrescription,
+  checkUserPrescriptionStatus,
+  submitPrescription,
+} from "../controllers/prescription.controller.js";
+import upload from "../middleware/multer.js";
+import { auth, adminOnly } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// 1. User uploads a prescription for a medicine
-router.post("/upload", auth, upload.single("image"), uploadPrescription);
+// ✅ Fix: use 'auth' not 'protect' — matches your authMiddleware export
+router.post("/upload-consent", auth, upload.single("image"), (req, res) => {
+  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  res.json({ url: req.file.path.replace(/\\/g, "/"), path: req.file.path.replace(/\\/g, "/") });
+});
 
-// 2. Admin/Pharmacist gets the list of pending reviews
-router.get("/pending", auth, adminOnly, getPendingPrescriptions);
-
-// 3. Admin/Pharmacist approves or rejects
-router.patch("/verify/:id", auth, adminOnly, verifyPrescription);
-
-// 4. Frontend checks if a user is allowed to buy a specific medicine
-router.get("/status/:medicineId", auth, checkUserPrescriptionStatus);
+router.post("/submit",          auth,             submitPrescription);
+router.post("/upload",          auth, upload.single("image"), uploadPrescription);
+router.get("/pending",          auth, adminOnly,  getPendingPrescriptions);
+router.patch("/verify/:id",     auth, adminOnly,  verifyPrescription);
+router.get("/status/:medicineId", auth,           checkUserPrescriptionStatus);
 
 export default router;

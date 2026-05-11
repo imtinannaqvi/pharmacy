@@ -106,7 +106,7 @@ const CartPage = () => {
             <p style={{ color: '#94a3b8', marginBottom: '28px', fontSize: '14px' }}>
               Add some products to get started
             </p>
-            <Link to="/home" style={{
+            <Link to="/TrendPro" style={{
               display: 'inline-flex', alignItems: 'center', gap: '8px',
               background: '#0f172a', color: 'white',
               padding: '12px 28px', borderRadius: '10px',

@@ -1,21 +1,71 @@
 import mongoose from "mongoose";
 
-const prescriptionSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  medicine: { type: mongoose.Schema.Types.ObjectId, ref: 'Medicine', required: true },
-  image: { type: String, required: true },
-  status: { 
-    type: String, 
-    enum: ['pending', 'approved', 'rejected'], 
-    default: 'pending' 
+const prescriptionSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    patientDetails: {
+      firstName: { type: String },
+      lastName:  { type: String },
+      gender:    { type: String },
+      dob:       { type: Date },
+      email:     { type: String },
+      phone:     { type: String },
+      address:   { type: String },
+      allergies: { type: String },
+    },
+
+    // ✅ Fix: nested object, NOT String
+    prescriberDetails: {
+      name:       { type: String },
+      regNumber:  { type: String },
+      type:       { type: String },
+      clinicName: { type: String },
+    },
+
+    medications: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Medicine",
+      },
+    ],
+
+    medicine: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Medicine",
+    },
+
+    image: {
+      type: String,
+    },
+
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
+
+    method: {
+      type: String,
+      enum: ["upload", "form"],
+      default: "form",
+    },
+
+    pharmacistNote: {
+      type: String,
+    },
+
+    verifiedAt: {
+      type: Date,
+    },
   },
-  pharmacistNote: String,
-  verifiedAt: Date,
-  createdAt: { type: Date, default: Date.now }
-});
+  {
+    timestamps: true,
+  }
+);
 
-// Create the model
-const Prescription = mongoose.model("Prescription", prescriptionSchema);
-
-// CRITICAL: This line must be exactly like this for the import to work
-export default Prescription;
+export default mongoose.model("Prescription", prescriptionSchema);

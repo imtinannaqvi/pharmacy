@@ -36,9 +36,10 @@ const Customers = () => {
     fetchUsers();
   };
 
+  // ✅ FIXED: Added optional chaining to prevent crash if data is missing
   const filtered = users.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
+    (u?.name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (u?.email || "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (

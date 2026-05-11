@@ -2,37 +2,53 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 
-// Storage configuration
+// Ensure uploads folder exists
+const uploadDir = "uploads/";
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Storage config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = "uploads/";
-    
-    // Create folder if it doesn't exist to prevent ENOENT errors
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    
     cb(null, uploadDir);
   },
+
   filename: (req, file, cb) => {
-    // Generates a unique filename using the current timestamp
     const ext = path.extname(file.originalname);
-    cb(null, Date.now() + ext);
+
+    cb(null, `${Date.now()}${ext}`);
   },
 });
 
-// File filter to ensure only images are uploaded
+// Allow images + pdf
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith("image")) {
+  const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/jpg",
+    "image/webp",
+    "application/pdf",
+  ];
+
+  if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Only images are allowed"), false);
+    cb(
+      new Error("Only JPG, PNG, WEBP images and PDF files are allowed"),
+      false
+    );
   }
 };
 
 const upload = multer({
   storage,
   fileFilter,
+
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
 });
 
 export default upload;

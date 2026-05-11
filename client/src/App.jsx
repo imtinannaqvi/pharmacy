@@ -1,39 +1,80 @@
-import { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Toaster } from 'react-hot-toast'
-import { CartProvider } from './context/CartContext' 
-import Sidebar from './components/Sidebar'
-import Dashboard from './components/Dashboard'
-import Analytics from './components/Analytics'
-import Orders from './components/Orders'
-import Prescriptions from './components/Prescriptions'
-import Products from './components/Products'
-import Customers from './components/Customers'
-import Threepot from './components/Threepot'
-import Invoices from './components/Invoices'
-import Commission from './components/Commission'
-import Setting from './components/Setting'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import ForgotPassword from './pages/ForgotPassword'
-import ResetPassword from './pages/ResetPassword'
-import './App.css'
-import Home from './pages/Home'
-import TrendPro from './pages/TrendPro'
+import { useState, useEffect } from 'react';
+import {
+  BrowserRouter, Routes, Route, Navigate, useLocation,
+} from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { CartProvider } from './context/CartContext';
+import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './context/AuthContext';
+
+// Components
+import Sidebar from './components/Sidebar';
+import HomeHeader from './pages/HomeHeader';
+import Dashboard from './components/Dashboard';
+import Analytics from './components/Analytics';
+import Orders from './components/Orders';
+import Prescriptions from './components/Prescriptions';
+import Products from './components/Products';
+import Customers from './components/Customers';
+import Threepot from './components/Threepot';
+import Invoices from './components/Invoices';
+import Commission from './components/Commission';
+import Setting from './components/Setting';
+
+// Pages
+import Login from './pages/Login';
+import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import Home from './pages/Home';
+import TrendPro from './pages/TrendPro';
 import CartPage from './pages/CartPage';
-import ProductDetails from './pages/ProductDetails'
+import ProductDetails from './pages/ProductDetails';
+import PrescriptionForm from './pages/Prescription-form';
+import PrescriberLink from './pages/PrescriberLink';
+import PrescriptionDetailed from './pages/PrescriptionDetialed';
 
-const DashboardLayout = () => {
-  const [activePage, setActivePage] = useState('dashboard')
+import './App.css';
+
+// ── Placeholder pages ──────────────────────────────────────────────────────
+const HowItWorks = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <h1 className="text-2xl font-bold text-slate-700">How It Works</h1>
+  </div>
+);
+const About = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <h1 className="text-2xl font-bold text-slate-700">About Us</h1>
+  </div>
+);
+const Contact = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <h1 className="text-2xl font-bold text-slate-700">Contact Us</h1>
+  </div>
+);
+
+// ── Placeholder tabs (for inbox/history/settings inside PrescriptionDetailed) ─
+const InboxPage = () => (
+  <div className="p-8 text-center text-slate-400 font-semibold">Prescriber Inbox — Coming Soon</div>
+);
+const HistoryPage = () => (
+  <div className="p-8 text-center text-slate-400 font-semibold">Prescription History — Coming Soon</div>
+);
+const PrescriptionSettings = () => (
+  <div className="p-8 text-center text-slate-400 font-semibold">Settings — Coming Soon</div>
+);
+
+// ── Header wrapper ─────────────────────────────────────────────────────────
+const HeaderWrapper = () => {
   const location = useLocation();
+  const isDashboard = location.pathname.startsWith('/admin');
+  return !isDashboard ? <HomeHeader /> : null;
+};
 
-  // Sync activePage if the URL changes directly
-  useEffect(() => {
-    const path = location.pathname.split('/').pop();
-    if (path && path !== 'admin' && pages[path]) {
-      setActivePage(path);
-    }
-  }, [location]);
+// ── Dashboard layout ───────────────────────────────────────────────────────
+const DashboardLayout = () => {
+  const [activePage, setActivePage] = useState('dashboard');
+  const location = useLocation();
 
   const pages = {
     dashboard:     <Dashboard />,
@@ -47,70 +88,102 @@ const DashboardLayout = () => {
     commission:    <Commission />,
     settings:      <Setting />,
     livesite:      <div className="p-8"><h1 className="text-2xl font-semibold">Live Site</h1></div>,
-  }
+  };
+
+  useEffect(() => {
+    const path = location.pathname.split('/').pop();
+    if (path && path !== 'admin' && pages[path]) {
+      setActivePage(path);
+    }
+  }, [location]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100">
       <Sidebar activePage={activePage} setActivePage={setActivePage} />
-      <main className="flex-1 overflow-y-auto">
-        {pages[activePage]}
-      </main>
+      <main className="flex-1 overflow-y-auto">{pages[activePage]}</main>
     </div>
-  )
-}
+  );
+};
 
-const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-
-  if (!token) return <Navigate to="/login" replace />;
-  
-  // Checking admin role as per your setup
-  if (user?.role?.toLowerCase() !== 'admin') {
-    return <Navigate to="/home" replace />;
-  }
-
+// ── Route guards ───────────────────────────────────────────────────────────
+const AdminRoute = ({ children }) => {
+  const { isLoggedIn, isAdmin } = useAuth();
+  if (!isLoggedIn) return <Navigate to="/login" replace />;
+  if (!isAdmin)    return <Navigate to="/home" replace />;
   return children;
 };
 
+const UserRoute = ({ children }) => {
+  const { isLoggedIn } = useAuth();
+  if (!isLoggedIn) return <Navigate to="/login" replace />;
+  return children;
+};
+
+// ── App ────────────────────────────────────────────────────────────────────
 const App = () => {
   return (
-    <CartProvider>
-      <BrowserRouter>
-        <Toaster position="top-center" reverseOrder={false} />
-        
-        <Routes>
-          {/* ✅ Public - anyone can access */}
-          <Route path="/" element={<Navigate to="/home" replace />} />
-          <Route path="/home" element={<Home />} />
-          
-          {/* 
-              FIX: Changed path to /medicine/:id to match the Navbar navigation 
-              and the Medico Guidance API context
-          */}
-          <Route path="/medicine/:id" element={<ProductDetails/>} />
-          <Route path="/product/:id" element={<ProductDetails/>} /> {/* Added as backup */}
-          
-          <Route path="/trendpro" element={<TrendPro />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password/:token" element={<ResetPassword />} />
-          <Route path="/cart" element={<CartPage />} />
+    <BrowserRouter>
+      <AuthProvider>
+        <CartProvider>
+          <Toaster position="top-center" reverseOrder={false} />
+          <HeaderWrapper />
 
-          {/* ✅ Admin only */}
-          <Route path="/admin/*" element={
-            <ProtectedRoute>
-              <DashboardLayout />
-            </ProtectedRoute>
-          } />
+          <Routes>
+            {/* Root redirect */}
+            <Route path="/" element={<Navigate to="/home" replace />} />
 
-          {/* ✅ Catch-all → home */}
-          <Route path="*" element={<Navigate to="/home" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </CartProvider>
-  )
-}
+            {/* ── Public Routes ── */}
+            <Route path="/home"                  element={<Home />} />
+            <Route path="/medicine/:id"          element={<ProductDetails />} />
+            <Route path="/product/:id"           element={<ProductDetails />} />
+            <Route path="/trendpro"              element={<TrendPro />} />
+            <Route path="/login"                 element={<Login />} />
+            <Route path="/register"              element={<Register />} />
+            <Route path="/forgot-password"       element={<ForgotPassword />} />
+            <Route path="/reset-password/:token" element={<ResetPassword />} />
+            <Route path="/how-it-works"          element={<HowItWorks />} />
+            <Route path="/about"                 element={<About />} />
+            <Route path="/contact"               element={<Contact />} />
 
-export default App
+            {/* ── Cart ── */}
+            <Route path="/cart" element={
+              <UserRoute><CartPage /></UserRoute>
+            } />
+
+            {/* ── Prescription — layout with tabs + nested routes ── */}
+            {/* 
+              PrescriptionDetailed renders the tab bar + <Outlet />
+              Clicking "Prescription" in HomeHeader → /prescription-form
+              which renders PrescriptionDetailed with PrescriptionForm inside Outlet
+            */}
+            <Route path="/" element={
+              <UserRoute><PrescriptionDetailed /></UserRoute>
+            }>
+              {/* Default tab: redirect /prescriptionDetialed → /prescription-form */}
+              <Route
+                path="prescriptionDetialed"
+                element={<Navigate to="/prescription-form" replace />}
+              />
+              <Route path="prescription-form" element={<PrescriptionForm />} />
+              <Route path="prescriberLink"    element={<PrescriberLink />} />
+              <Route path="inbox"             element={<InboxPage />} />
+              <Route path="history"           element={<HistoryPage />} />
+              {/* "settings" inside prescription layout — different from admin settings */}
+              <Route path="prescription-settings" element={<PrescriptionSettings />} />
+            </Route>
+
+            {/* ── Admin Routes ── */}
+            <Route path="/admin/*" element={
+              <AdminRoute><DashboardLayout /></AdminRoute>
+            } />
+
+            {/* ── Catch All ── */}
+            <Route path="*" element={<Navigate to="/home" replace />} />
+          </Routes>
+        </CartProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+};
+
+export default App;
